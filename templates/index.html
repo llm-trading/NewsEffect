@@ -13,11 +13,11 @@
         h1 { font-size: 2.5em; margin-bottom: 10px; }
         .subtitle { color: #cbd5e1; font-size: 1.1em; }
         .chart-container { background: #1a1f2e; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative; }
-        #news-panel { background: #1a1f2e; border-radius: 10px; padding: 20px; max-height: 600px; overflow-y: auto; }
-        .news-item { background: #252d3d; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #3b82f6; }
-        .news-date { color: #60a5fa; font-weight: bold; margin-bottom: 10px; font-size: 1.1em; }
-        .news-title { color: #e7e9ea; margin: 5px 0; font-size: 0.95em; }
-        .news-meta { color: #94a3b8; font-size: 0.85em; margin-top: 5px; }
+        #news-panel { background: #1a1f2e; border-radius: 10px; padding: 20px; max-height: 600px; overflow-y: auto; display: none; }
+        .news-item { background: #252d3d; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #3b82f6; display: none; }
+        .news-date { color: #60a5fa; font-weight: bold; margin-bottom: 10px; font-size: 1.1em; display: none; }
+        .news-title { color: #e7e9ea; margin: 5px 0; font-size: 0.95em; display: none; }
+        .news-meta { color: #94a3b8; font-size: 0.85em; margin-top: 5px; display: none; }
         .legend { background: #252d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .legend-item { display: inline-block; margin-right: 20px; color: #cbd5e1; font-size: 0.95em; }
         .legend-marker { display: inline-block; width: 20px; height: 3px; background: #ef4444; margin-right: 5px; vertical-align: middle; }
@@ -25,48 +25,59 @@
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1f2e; }
         ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
-        .news-popup {
+        .news-tooltip {
             position: fixed;
             background: #1a1f2e;
             border: 2px solid #3b82f6;
             border-radius: 8px;
             padding: 15px;
-            max-width: 450px;
-            max-height: 400px;
+            max-width: 500px;
+            max-height: 450px;
             overflow-y: auto;
             z-index: 10000;
             box-shadow: 0 8px 16px rgba(0,0,0,0.5);
             display: none;
             pointer-events: all;
         }
-        .news-popup-title {
+        .news-tooltip-title {
             color: #60a5fa;
             font-weight: bold;
             margin-bottom: 10px;
-            font-size: 1em;
+            font-size: 1.1em;
             border-bottom: 1px solid #3b82f6;
             padding-bottom: 5px;
         }
-        .news-popup-item {
-            margin: 8px 0;
-            padding: 8px;
+        .news-tooltip-item {
+            margin: 10px 0;
+            padding: 10px;
             background: #252d3d;
             border-radius: 4px;
         }
-        .news-popup-item a {
+        .news-tooltip-item a {
             color: #60a5fa;
             text-decoration: none;
-            font-size: 0.9em;
-            pointer-events: all;
+            font-size: 0.95em;
+            font-weight: 500;
         }
-        .news-popup-item a:hover {
+        .news-tooltip-item a:hover {
             text-decoration: underline;
         }
-        .news-popup-meta {
+        .news-tooltip-meta {
             color: #94a3b8;
-            font-size: 0.8em;
-            margin-top: 4px;
+            font-size: 0.85em;
+            margin-top: 6px;
         }
+        .sentiment-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .sentiment-positive { background: #10b981; color: white; }
+        .sentiment-negative { background: #ef4444; color: white; }
+        .sentiment-neutral { background: #eab308; color: #1a1f2e; }
     </style>
 </head>
 <body>
@@ -78,8 +89,16 @@
 
         <div class="legend">
             <div class="legend-item">
-                <span class="legend-marker" style="background: #3b82f6; width: 10px; height: 10px; border-radius: 50%;"></span>
-                <span>Blue dots below chart indicate news articles (hover to view details)</span>
+                <span class="legend-marker" style="background: #10b981; width: 10px; height: 10px; border-radius: 50%;"></span>
+                <span>Green = Positive</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-marker" style="background: #eab308; width: 10px; height: 10px; border-radius: 50%;"></span>
+                <span>Yellow = Neutral</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-marker" style="background: #ef4444; width: 10px; height: 10px; border-radius: 50%;"></span>
+                <span>Red = Negative</span>
             </div>
             <div class="legend-tip">💡 Use mouse scroll to zoom in/out | Click and drag to pan | Double-click to reset</div>
         </div>
@@ -88,9 +107,7 @@
             <div id="candlestick-chart"></div>
         </div>
         
-        <div id="news-popup" class="news-popup"></div>
-
-        <div id="news-panel"></div>
+        <div id="news-tooltip" class="news-tooltip"></div>
     </div>
 
     <script>
@@ -122,20 +139,22 @@
                     marker: { color: '#3b82f6', opacity: 0.3 }
                 };
 
-                // Create news markers as scatter traces
+                // Create news markers as scatter traces with individual colors
                 const newsTraces = [];
                 const newsDateMap = {};
                 let maxNewsCount = 0;
                 
                 data.filter(d => d.hasNews).forEach(d => {
                     const newsCount = Math.min(d.newsCount, 5);
+                    const colors = d.sentimentColors || [];
                     maxNewsCount = Math.max(maxNewsCount, newsCount);
                     for (let i = 0; i < newsCount; i++) {
                         newsTraces.push({
                             x: d.date,
                             y: i + 1,
                             newsCount: d.newsCount,
-                            date: d.date
+                            date: d.date,
+                            color: colors[i] || '#eab308'
                         });
                     }
                     newsDateMap[d.date] = d.newsCount;
@@ -149,11 +168,13 @@
                     name: 'News',
                     yaxis: 'y3',
                     marker: {
-                        color: '#3b82f6',
+                        color: newsTraces.map(t => t.color),
                         size: 10,
                         symbol: 'circle'
                     },
-                    hoverinfo: 'none',
+                    text: newsTraces.map(t => t.date),
+                    hovertemplate: '%{text}<extra></extra>',
+                    showlegend: true,
                     customdata: newsTraces.map(t => ({ date: t.date, count: t.newsCount }))
                 };
 
@@ -207,104 +228,96 @@
                 Plotly.newPlot('candlestick-chart', [volume, candlestick, newsScatter], candleLayout, config);
 
                 const chartDiv = document.getElementById('candlestick-chart');
-                const popup = document.getElementById('news-popup');
+                const tooltip = document.getElementById('news-tooltip');
                 let currentHoverDate = null;
+                let tooltipTimeout = null;
 
                 chartDiv.on('plotly_hover', function(eventData) {
                     const point = eventData.points[0];
                     if (point.data.name === 'News') {
                         const date = point.x;
+                        
+                        clearTimeout(tooltipTimeout);
                         currentHoverDate = date;
                         const articles = news[date];
                         
                         if (articles) {
-                            let popupHTML = `<div class="news-popup-title">${date} - ${articles.length} Articles</div>`;
+                            let tooltipHTML = `<div class="news-tooltip-title">${date} - ${articles.length} Articles</div>`;
                             articles.forEach(article => {
-                                popupHTML += `
-                                    <div class="news-popup-item">
+                                const sentiment = article.sentiment || 'neutral';
+                                const confidence = article.confidence_score !== undefined ? (article.confidence_score * 100).toFixed(0) : 'N/A';
+                                
+                                tooltipHTML += `
+                                    <div class="news-tooltip-item">
                                         <a href="${article.link}" target="_blank">${article.title}</a>
-                                        <div class="news-popup-meta">${article.source} | ${article.time}</div>
+                                        <div class="news-tooltip-meta">
+                                            <span class="sentiment-badge sentiment-${sentiment}">${sentiment.toUpperCase()}</span>
+                                            Confidence: ${confidence}%
+                                        </div>
+                                        <div class="news-tooltip-meta">${article.source} | ${article.time}</div>
+                                        ${article.market_impact ? `<div class="news-tooltip-meta" style="margin-top: 4px; font-style: italic; color: #cbd5e1;">💡 ${article.market_impact}</div>` : ''}
                                     </div>
                                 `;
                             });
                             
-                            popup.innerHTML = popupHTML;
-                            popup.style.display = 'block';
+                            tooltip.innerHTML = tooltipHTML;
+                            tooltip.style.display = 'block';
                             
                             const viewportWidth = window.innerWidth;
                             const viewportHeight = window.innerHeight;
                             
-                            popup.style.visibility = 'hidden';
-                            popup.style.display = 'block';
-                            const popupRect = popup.getBoundingClientRect();
-                            popup.style.visibility = 'visible';
+                            tooltip.style.visibility = 'hidden';
+                            tooltip.style.display = 'block';
+                            const tooltipRect = tooltip.getBoundingClientRect();
+                            tooltip.style.visibility = 'visible';
                             
-                            let left = eventData.event.clientX;
-                            let top = eventData.event.clientY - popupRect.height - 10;
+                            let left = eventData.event.clientX + 15;
+                            let top = eventData.event.clientY - tooltipRect.height / 2;
                             
-                            if (left + popupRect.width > viewportWidth - 20) {
-                                left = viewportWidth - popupRect.width - 20;
+                            if (left + tooltipRect.width > viewportWidth - 20) {
+                                left = eventData.event.clientX - tooltipRect.width - 15;
                             }
                             if (left < 10) {
                                 left = 10;
                             }
                             
                             if (top < 10) {
-                                top = eventData.event.clientY + 10;
+                                top = 10;
+                            }
+                            if (top + tooltipRect.height > viewportHeight - 10) {
+                                top = viewportHeight - tooltipRect.height - 10;
                             }
                             
-                            popup.style.left = left + 'px';
-                            popup.style.top = top + 'px';
+                            tooltip.style.left = left + 'px';
+                            tooltip.style.top = top + 'px';
                         }
                     }
                 });
 
                 chartDiv.on('plotly_unhover', function(eventData) {
-                    setTimeout(() => {
-                        if (!popup.matches(':hover')) {
-                            popup.style.display = 'none';
+                    tooltipTimeout = setTimeout(() => {
+                        if (!tooltip.matches(':hover')) {
+                            tooltip.style.display = 'none';
                             currentHoverDate = null;
                         }
                     }, 200);
                 });
                 
-                popup.addEventListener('mouseenter', function() {
-                    popup.style.display = 'block';
+                tooltip.addEventListener('mouseenter', function() {
+                    clearTimeout(tooltipTimeout);
+                    tooltip.style.display = 'block';
                 });
                 
-                popup.addEventListener('mouseleave', function() {
-                    popup.style.display = 'none';
+                tooltip.addEventListener('mouseleave', function() {
+                    tooltip.style.display = 'none';
                     currentHoverDate = null;
                 });
 
                 chartDiv.on('plotly_relayout', function() {
-                    if (!popup.matches(':hover')) {
-                        popup.style.display = 'none';
+                    if (!tooltip.matches(':hover')) {
+                        tooltip.style.display = 'none';
                         currentHoverDate = null;
                     }
-                });
-
-                const newsPanel = document.getElementById('news-panel');
-                const sortedDates = Object.keys(news).sort().reverse();
-                
-                sortedDates.forEach(date => {
-                    const articles = news[date];
-                    const dateDiv = document.createElement('div');
-                    dateDiv.className = 'news-item';
-                    dateDiv.innerHTML = `<div class="news-date">${date} (${articles.length} articles)</div>`;
-                    
-                    articles.forEach(article => {
-                        const titleDiv = document.createElement('div');
-                        titleDiv.className = 'news-title';
-                        titleDiv.innerHTML = `• <a href="${article.link}" target="_blank" style="color: #60a5fa; text-decoration: none;">${article.title}</a>`;
-                        const metaDiv = document.createElement('div');
-                        metaDiv.className = 'news-meta';
-                        metaDiv.textContent = `${article.source} | ${article.time}`;
-                        dateDiv.appendChild(titleDiv);
-                        dateDiv.appendChild(metaDiv);
-                    });
-                    
-                    newsPanel.appendChild(dateDiv);
                 });
             });
     </script>
