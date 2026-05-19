@@ -7,17 +7,26 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=flat-square)
 
-**Visualize how financial news sentiment correlates with stock price movements.**
-
-NewsEffect overlays AI-analyzed news events directly onto an interactive candlestick chart. Each news dot is color-coded by sentiment — green for bullish, red for bearish, yellow for neutral — so you can instantly see what the market was hearing on any given day.
+**Visualize how financial news sentiment correlates with stock price movements — powered by a local LLM, no API keys required.**
 
 ---
 
-## Demo
+## The Problem
 
-![NewsEffect Screenshot](https://via.placeholder.com/900x450/0f1419/3b82f6?text=Candlestick+Chart+with+News+Sentiment+Overlay)
+When analyzing a stock's price history, context is everything. A candlestick chart tells you *what* happened to the price, but not *why*. Traders and researchers typically have to:
 
-> Hover over any news dot to see article titles, sentiment scores, market impact summaries, and source links — all without leaving the chart.
+1. Look at a price chart in one tab
+2. Search for news from that date in another tab
+3. Manually read articles to gauge sentiment
+4. Repeat for every significant price move
+
+This is slow, error-prone, and impossible to do at scale across hundreds of trading days.
+
+## The Solution
+
+NewsEffect collapses that workflow into a single interactive chart. It runs every news article through a local LLM (`finance-summarizer-qwen2.5:1.5b` via Ollama) to extract **sentiment**, **market impact**, and **confidence score** — then plots color-coded dots directly on the price chart, one dot per article per day.
+
+Hover over any dot → see article titles, clickable source links, sentiment badges, and AI-generated market impact summaries, all without leaving the chart.
 
 ---
 
@@ -25,22 +34,22 @@ NewsEffect overlays AI-analyzed news events directly onto an interactive candles
 
 ```mermaid
 flowchart TD
-    A[Raw News Articles\nmaster_ticker_articles.jsonl] --> B[process_ticker_news.py]
-    B --> C{Ollama LLM\nfinance-summarizer-qwen2.5:1.5b}
-    C --> D[Enriched Articles\nprocessed_ticker_articles.jsonl]
-    E[Stock Price CSV\nOHLCV Data] --> F[app.py\nFlask Server]
+    A[Raw News JSONL] --> B[process_ticker_news.py]
+    B --> C[Ollama Local LLM]
+    C --> D[Enriched News JSONL]
+    E[Stock Price CSV] --> F[app.py Flask Server]
     D --> F
-    F --> G[/api/data\nJSON endpoint]
-    G --> H[index.html\nPlotly.js Frontend]
-    H --> I[Interactive Chart]
-    
-    subgraph Analysis Pipeline
+    F --> G[REST API /api/data]
+    G --> H[Plotly.js Frontend]
+    H --> I[Interactive Chart with News Overlay]
+
+    subgraph pipeline [Sentiment Analysis Pipeline]
         B
         C
         D
     end
-    
-    subgraph Web Layer
+
+    subgraph web [Web Layer]
         F
         G
         H
